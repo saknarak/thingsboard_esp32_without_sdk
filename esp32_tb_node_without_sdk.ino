@@ -29,6 +29,9 @@
 #define MQTT_DISCONNECTED 0
 #define MQTT_CONNECTED 2
 #define MQTT_PACKET_SIZE 1024
+// -------------------------------------
+#define TB_TELEMETRY_TOPIC "v1/devices/me/telemetry"
+
 ////////////////////////////////////////
 // GLOBAL VARIABLES
 ////////////////////////////////////////
@@ -46,6 +49,13 @@ bool mqttReady = false;
 uint8_t mqttState = MQTT_DISCONNECTED;
 unsigned long mqttDelayTimer = 0;
 unsigned long mqttDelayTimeout = 5000;
+
+// Sensor
+unsigned long sensorReadTimer = 0;
+unsigned long sensorReadInterval = 1000;
+unsigned long sensorUploadTimer = 0;
+unsigned long sensorUploadInterval = 5000;
+int16_t sensorValue = 0;
 
 ////////////////////////////////////////
 // FUNCTION HEADERS
@@ -69,12 +79,14 @@ void setup() {
   delay(1000);
   wifiSetup();
   mqttSetup();
+  sensorSetup();
 }
 
 void loop() {
   unsigned long t = millis();
   wifiLoop(t);
   mqttLoop(t);
+  sensorLoop(t);
 }
 
 ////////////////////////////////////////
@@ -143,3 +155,28 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   // TODO: process rpc request
   // TODO: process rpc resonse
 }
+
+// SENSORS
+void sensorSetup() {
+  // do nothing
+}
+
+void sensorLoop(unsigned long t) {
+  if (t - sensorReadTimer >= sensorReadInterval) {
+    int prevValue = sensorValue;
+    sensorValue = sensorValue + random(0, 3) - 1;
+    if (prevValue != sensorValue) {
+      sensorReadTimer = 0; // force upload
+    }
+  }
+
+  if (t - sensorUploadTimer >= sensorUploadInterval) {
+    sensorUploadTimer = t;
+    if (mqttReady) {
+      char payload[1024];
+      sprintf("{\"temperature\":%d}", sensorValue);
+      mqttClient.publish(TB_TELEMETRY_TOPIC, payload);
+    }
+  }
+}
+
