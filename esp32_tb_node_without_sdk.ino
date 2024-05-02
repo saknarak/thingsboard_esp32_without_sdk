@@ -30,6 +30,7 @@
 #define MQTT_CONNECTED 2
 #define MQTT_PACKET_SIZE 1024
 // -------------------------------------
+// https://thingsboard.io/docs/reference/mqtt-api/#telemetry-upload-api
 #define TB_TELEMETRY_TOPIC "v1/devices/me/telemetry"
 
 ////////////////////////////////////////
