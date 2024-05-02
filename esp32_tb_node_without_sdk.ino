@@ -193,7 +193,7 @@ void sensorLoop(unsigned long t) {
     sensorUploadTimer = t;
     if (mqttReady) {
       char payload[1024];
-      sprintf("{\"temperature\":%d}", sensorValue);
+      sprintf(payload, "{\"temperature\":%d}", sensorValue);
       mqttClient.publish(TB_TELEMETRY_TOPIC, payload);
     }
   }
