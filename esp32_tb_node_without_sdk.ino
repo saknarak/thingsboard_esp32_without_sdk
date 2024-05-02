@@ -93,7 +93,7 @@ void wifiLoop(unsigned long t) {
       Serial.println("WiFi Disconnected");
       wifiState = WIFI_DISCONNECTED;
     }
-    if (wifiState != WIFI_CONNECTING || t - wifiConnectTimer > wifiConnectTimeout) {
+    if (wifiState != WIFI_CONNECTING || t - wifiConnectTimer >= wifiConnectTimeout) {
       Serial.println("WiFi Connecting...");
       WiFi.disconnect();
       WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
