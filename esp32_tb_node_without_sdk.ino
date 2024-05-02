@@ -74,8 +74,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length);
 // MAIN
 ////////////////////////////////////////
 
-void setup()
-{
+void setup() {
   Serial.begin(115200);
   delay(1000);
   wifiSetup();
@@ -83,8 +82,7 @@ void setup()
   sensorSetup();
 }
 
-void loop()
-{
+void loop() {
   unsigned long t = millis();
   wifiLoop(t);
   mqttLoop(t);
@@ -96,34 +94,26 @@ void loop()
 ////////////////////////////////////////
 
 // WIFI
-void wifiSetup()
-{
+void wifiSetup() {
   // do nothing
 }
 
-void wifiLoop(unsigned long t)
-{
+void wifiLoop(unsigned long t) {
   wifiReady = WiFi.status() == WL_CONNECTED;
-  if (!wifiReady)
-  {
-    if (wifiState == WIFI_CONNECTED)
-    {
+  if (!wifiReady) {
+    if (wifiState == WIFI_CONNECTED) {
       Serial.println("WiFi Disconnected");
       wifiState = WIFI_DISCONNECTED;
     }
-    if (wifiState != WIFI_CONNECTING || t - wifiConnectTimer >= wifiConnectTimeout)
-    {
+    if (wifiState != WIFI_CONNECTING || t - wifiConnectTimer >= wifiConnectTimeout) {
       Serial.println("WiFi Connecting...");
       WiFi.disconnect();
       WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
       wifiState = WIFI_CONNECTING;
       wifiConnectTimer = t;
     }
-  }
-  else
-  {
-    if (wifiState != WIFI_CONNECTED)
-    {
+  } else  {
+    if (wifiState != WIFI_CONNECTED) {
       Serial.println("WiFi Connected");
       wifiState = WIFI_CONNECTED;
     }
@@ -131,45 +121,36 @@ void wifiLoop(unsigned long t)
 }
 
 // MQTT
-void mqttSetup()
-{
+void mqttSetup() {
   mqttClient.setBufferSize(MQTT_PACKET_SIZE);
   mqttClient.setServer(TB_MQTT_SERVER, TB_MQTT_PORT);
   mqttClient.setCallback(mqttCallback);
 }
 
-void mqttLoop(unsigned long t)
-{
+void mqttLoop(unsigned long t) {
   mqttReady = mqttClient.connected();
-  if (!mqttReady)
-  {
-    if (mqttState == MQTT_CONNECTED)
-    {
+  if (!mqttReady) {
+    if (mqttState == MQTT_CONNECTED) {
       Serial.println("MQTT Disconnected");
       mqttState = MQTT_DISCONNECTED;
       mqttDelayTimer = t;
     }
-    if (t - mqttDelayTimer >= mqttDelayTimeout)
-    {
+    if (t - mqttDelayTimer >= mqttDelayTimeout) {
       mqttDelayTimer = t;
       Serial.println("MQTT Connecting...");
-      if (mqttClient.connect(DEVICE_ACCESS_TOKEN))
-      {
+      if (mqttClient.connect(DEVICE_ACCESS_TOKEN)) {
         Serial.println("MQTT Connected");
         mqttReady = true;
         mqttState = MQTT_CONNECTED;
         // TODO: subscribe for shared attributes and rpc request
       }
     }
-  }
-  else
-  {
+  } else {
     mqttClient.loop();
   }
 }
 
-void mqttCallback(char *topic, byte *payload, unsigned int length)
-{
+void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // TODO: process shared attributes changed
   // TODO: process rpc request
   // TODO: process rpc resonse
