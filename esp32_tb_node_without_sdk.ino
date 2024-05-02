@@ -5,6 +5,7 @@
 // -------------------------------------
 // Libraries
 // - PubSubClient by Nick O'leary
+// - ArduinoJson
 ////////////////////////////////////////
 
 ////////////////////////////////////////
@@ -12,6 +13,7 @@
 ////////////////////////////////////////
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <ArduinoJson.h>
 
 ////////////////////////////////////////
 // DEFINES
@@ -21,6 +23,8 @@
 #define TB_MQTT_SERVER ""
 #define TB_MQTT_PORT 1883
 #define DEVICE_ACCESS_TOKEN ""
+#define ATTRIBUTE_KEYS "{\"clientKeys\":\"localIp\",\"sharedKeys\":\"uploadInterval,deviceMode\"}"
+#define JSON_DOC_SIZE 1024
 // -------------------------------------
 #define WIFI_DISCONNECTED 0
 #define WIFI_CONNECTING 1
@@ -34,6 +38,9 @@
 #define TB_TELEMETRY_TOPIC "v1/devices/me/telemetry"
 // https://thingsboard.io/docs/reference/mqtt-api/#publish-attribute-update-to-the-server
 #define TB_ATTRIBUTE_TOPIC "v1/devices/me/attributes"
+// https://thingsboard.io/docs/reference/mqtt-api/#request-attribute-values-from-the-server
+#define TB_ATTRIBUTE_REQUEST_TOPIC "v1/devices/me/attributes/request/"
+#define TB_ATTRIBUTE_RESPONSE_TOPIC "v1/devices/me/attributes/response/+"
 
 ////////////////////////////////////////
 // GLOBAL VARIABLES
@@ -64,18 +71,23 @@ int16_t sensorValue = 0;
 unsigned long deviceStatusTimer = 0;
 unsigned long deviceStatusInterval = 10000;
 
+// Device Config
+unsigned long reqSeq = 1;
+uint8_t deviceMode = 1; // 1 = ON, 0 = OFF
+int resTopicLen = strlen(TB_ATTRIBUTE_RESPONSE_TOPIC) - 1;
+
 ////////////////////////////////////////
 // FUNCTION HEADERS
 ////////////////////////////////////////
 
-// WiFi
-void wifiSetup();
-void wifiLoop();
+// // WiFi
+// void wifiSetup();
+// void wifiLoop();
 
-// MQTT
-void mqttSetup();
-void mqttLoop();
-void mqttCallback(char *topic, byte *payload, unsigned int length);
+// // MQTT
+// void mqttSetup();
+// void mqttLoop();
+// void mqttCallback(char *topic, byte *payload, unsigned int length);
 
 ////////////////////////////////////////
 // MAIN
@@ -151,6 +163,10 @@ void mqttLoop(unsigned long t) {
         mqttReady = true;
         mqttState = MQTT_CONNECTED;
         // TODO: subscribe for shared attributes and rpc request
+        char topic[128];
+        sprintf(topic, "%s%c", TB_ATTRIBUTE_RESPONSE_TOPIC, '+');
+        mqttClient.subscribe(topic);
+        deviceConfigRequest();
 
         deviceStatusUpload();
       }
@@ -159,9 +175,11 @@ void mqttLoop(unsigned long t) {
     mqttClient.loop();
   }
 }
-
 void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // TODO: process shared attributes changed
+  if (strncmp(topic, TB_ATTRIBUTE_RESPONSE_TOPIC, resTopicLen) == 0) {
+    processAttributeChange(payload, length);
+  }
   // TODO: process rpc request
   // TODO: process rpc resonse
 }
@@ -225,5 +243,43 @@ void deviceStatusUpload() {
   mqttClient.publish(TB_ATTRIBUTE_TOPIC, payload);
   Serial.print("Device Status: ");
   Serial.println(payload);
+}
+
+void deviceConfigRequest() {
+  char topic[256];
+  sprintf(topic, "%s%d", TB_ATTRIBUTE_REQUEST_TOPIC, reqSeq++);
+  mqttClient.publish(TB_ATTRIBUTE_REQUEST_TOPIC, ATTRIBUTE_KEYS);
+}
+
+void processAttributeChange(byte *payload, size_t len) {
+  DynamicJsonDocument doc(JSON_DOC_SIZE);
+  char json[MQTT_PACKET_SIZE];
+  memcpy(json, payload, len);
+  json[len] = 0;
+  DeserializationError err = deserializeJson(doc, json);
+  if (err) {
+    return;
+  }
+  if (doc.containsKey("client")) {
+    // TODO: process client attributes
+  }
+  if (doc.containsKey("shared")) {
+    // process shared attributes
+    JsonObject shared = doc["shared"];
+    if (shared.containsKey("uploadInterval")) {
+      unsigned long newInterval = shared["uploadInterval"].as<unsigned long>();
+      if (newInterval >= 1000 && newInterval <= 60000) {
+        sensorUploadInterval = newInterval;
+        Serial.printf("Config: sensorUploadInterval=%d", sensorUploadInterval);
+      }
+    }
+    if (shared.containsKey("deviceMode")) {
+      uint8_t newMode = shared["deviceMode"].as<uint8_t>();
+      if (newMode >= 0 && newMode <= 1) {
+        deviceMode = newMode;
+        Serial.printf("Config: deviceMode=%d", deviceMode);
+      }
+    }
+  }
 }
 
