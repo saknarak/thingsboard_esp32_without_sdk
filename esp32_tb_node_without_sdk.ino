@@ -65,19 +65,6 @@ unsigned long deviceStatusTimer = 0;
 unsigned long deviceStatusInterval = 10000;
 
 ////////////////////////////////////////
-// FUNCTION HEADERS
-////////////////////////////////////////
-
-// WiFi
-void wifiSetup();
-void wifiLoop();
-
-// MQTT
-void mqttSetup();
-void mqttLoop();
-void mqttCallback(char *topic, byte *payload, unsigned int length);
-
-////////////////////////////////////////
 // MAIN
 ////////////////////////////////////////
 
