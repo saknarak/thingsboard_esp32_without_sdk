@@ -59,19 +59,6 @@ unsigned long sensorUploadInterval = 5000;
 int16_t sensorValue = 0;
 
 ////////////////////////////////////////
-// FUNCTION HEADERS
-////////////////////////////////////////
-
-// WiFi
-void wifiSetup();
-void wifiLoop();
-
-// MQTT
-void mqttSetup();
-void mqttLoop();
-void mqttCallback(char *topic, byte *payload, unsigned int length);
-
-////////////////////////////////////////
 // MAIN
 ////////////////////////////////////////
 
