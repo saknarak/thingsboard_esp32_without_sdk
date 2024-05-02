@@ -163,9 +163,20 @@ void mqttLoop(unsigned long t) {
   }
 }
 void mqttCallback(char *topic, byte *payload, unsigned int length) {
+  // expect paylaod to be JSON
+  DynamicJsonDocument doc(JSON_DOC_SIZE);
+  char json[MQTT_PACKET_SIZE];
+  memcpy(json, payload, length);
+  json[length] = 0;
+  DeserializationError err = deserializeJson(doc, json);
+  if (err) {
+    Serial.println("Not a valid json");
+    return;
+  }
+
   // TODO: process shared attributes changed
   if (strncmp(topic, TB_ATTRIBUTE_RESPONSE_TOPIC, resTopicLen) == 0) {
-    processAttributeChange(payload, length);
+    processAttributeChange(doc);
   }
   // TODO: process rpc request
   // TODO: process rpc resonse
@@ -238,15 +249,7 @@ void deviceConfigRequest() {
   mqttClient.publish(TB_ATTRIBUTE_REQUEST_TOPIC, ATTRIBUTE_KEYS);
 }
 
-void processAttributeChange(byte *payload, size_t len) {
-  DynamicJsonDocument doc(JSON_DOC_SIZE);
-  char json[MQTT_PACKET_SIZE];
-  memcpy(json, payload, len);
-  json[len] = 0;
-  DeserializationError err = deserializeJson(doc, json);
-  if (err) {
-    return;
-  }
+void processAttributeChange(DynamicJsonDocument &doc) {
   if (doc.containsKey("client")) {
     // TODO: process client attributes
   }
