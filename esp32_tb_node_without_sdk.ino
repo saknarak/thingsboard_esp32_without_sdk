@@ -28,7 +28,7 @@
 // -------------------------------------
 #define MQTT_DISCONNECTED 0
 #define MQTT_CONNECTED 2
-
+#define MQTT_PACKET_SIZE 1024
 ////////////////////////////////////////
 // GLOBAL VARIABLES
 ////////////////////////////////////////
@@ -110,6 +110,7 @@ void wifiLoop(unsigned long t) {
 
 // MQTT
 void mqttSetup() {
+  mqttClient.setBufferSize(MQTT_PACKET_SIZE);
   mqttClient.setServer(TB_MQTT_SERVER, TB_MQTT_PORT);
   mqttClient.setCallback(mqttCallback);
 }
