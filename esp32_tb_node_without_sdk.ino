@@ -77,19 +77,6 @@ uint8_t deviceMode = 1; // 1 = ON, 0 = OFF
 int resTopicLen = strlen(TB_ATTRIBUTE_RESPONSE_TOPIC) - 1;
 
 ////////////////////////////////////////
-// FUNCTION HEADERS
-////////////////////////////////////////
-
-// // WiFi
-// void wifiSetup();
-// void wifiLoop();
-
-// // MQTT
-// void mqttSetup();
-// void mqttLoop();
-// void mqttCallback(char *topic, byte *payload, unsigned int length);
-
-////////////////////////////////////////
 // MAIN
 ////////////////////////////////////////
 
