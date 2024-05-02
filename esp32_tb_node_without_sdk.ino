@@ -168,14 +168,17 @@ void sensorLoop(unsigned long t) {
     if (prevValue != sensorValue) {
       sensorReadTimer = 0; // force upload
     }
+    Serial.printf("Sensor: new=%d prev=%d", sensorValue, prevValue);
   }
 
   if (t - sensorUploadTimer >= sensorUploadInterval) {
     sensorUploadTimer = t;
     if (mqttReady) {
       char payload[1024];
-      sprintf("{\"temperature\":%d}", sensorValue);
+      sprintf(payload, "{\"temperature\":%d}", sensorValue);
       mqttClient.publish(TB_TELEMETRY_TOPIC, payload);
+    } else {
+      // TODO: append to queue
     }
   }
 }
