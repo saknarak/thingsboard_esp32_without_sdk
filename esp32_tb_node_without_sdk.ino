@@ -151,6 +151,8 @@ void mqttLoop(unsigned long t) {
         mqttReady = true;
         mqttState = MQTT_CONNECTED;
         // TODO: subscribe for shared attributes and rpc request
+
+        deviceStatusUpload();
       }
     }
   } else {
