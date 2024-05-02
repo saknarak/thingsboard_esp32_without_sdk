@@ -32,6 +32,8 @@
 // -------------------------------------
 // https://thingsboard.io/docs/reference/mqtt-api/#telemetry-upload-api
 #define TB_TELEMETRY_TOPIC "v1/devices/me/telemetry"
+// https://thingsboard.io/docs/reference/mqtt-api/#publish-attribute-update-to-the-server
+#define TB_ATTRIBUTE_TOPIC "v1/devices/me/attributes"
 
 ////////////////////////////////////////
 // GLOBAL VARIABLES
@@ -57,6 +59,10 @@ unsigned long sensorReadInterval = 1000;
 unsigned long sensorUploadTimer = 0;
 unsigned long sensorUploadInterval = 5000;
 int16_t sensorValue = 0;
+
+// Device Status
+unsigned long deviceStatusTimer = 0;
+unsigned long deviceStatusInterval = 10000;
 
 ////////////////////////////////////////
 // FUNCTION HEADERS
@@ -88,6 +94,7 @@ void loop() {
   wifiLoop(t);
   mqttLoop(t);
   sensorLoop(t);
+  deviceStatusLoop(t);
 }
 
 ////////////////////////////////////////
@@ -164,16 +171,19 @@ void sensorSetup() {
 
 void sensorLoop(unsigned long t) {
   if (t - sensorReadTimer >= sensorReadInterval) {
+    sensorReadTimer = t;
+    
     int prevValue = sensorValue;
     sensorValue = sensorValue + random(0, 3) - 1;
     if (prevValue != sensorValue) {
-      sensorReadTimer = 0; // force upload
+      sensorUploadTimer = 0; // force upload
     }
     Serial.printf("Sensor: new=%d prev=%d", sensorValue, prevValue);
   }
 
   if (t - sensorUploadTimer >= sensorUploadInterval) {
     sensorUploadTimer = t;
+    
     if (mqttReady) {
       char payload[1024];
       sprintf(payload, "{\"temperature\":%d}", sensorValue);
@@ -182,5 +192,34 @@ void sensorLoop(unsigned long t) {
       // TODO: append to queue
     }
   }
+}
+
+// Device Status
+void deviceStatusLoop(unsigned long t) {
+  if (!mqttReady || t - deviceStatusTimer < deviceStatusInterval) {
+    return;
+  }
+  deviceStatusTimer = t;
+
+  deviceStatusUpload();
+}
+
+void deviceStatusUpload() {
+  char payload[1024];
+  multi_heap_info_t info;
+  heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  sprintf(payload, "{\"rssi\":%d,\"channel\":%d,\"bssid\":\"%s\",\"localIp\":\"%s\",\"ssid\":\"%s\",\"totalFree\":%d,\"minFree\":%d,\"largeFree\":%d}",
+    WiFi.RSSI(),
+    WiFi.channel(),
+    WiFi.BSSIDstr().c_str(),
+    WiFi.localIP().toString().c_str(),
+    WiFi.SSID().c_str(),
+    info.total_free_bytes,
+    info.minimum_free_bytes,
+    info.largest_free_block
+  );
+  mqttClient.publish(TB_ATTRIBUTE_TOPIC, payload);
+  Serial.print("Device Status: ");
+  Serial.println(payload);
 }
 
