@@ -188,6 +188,8 @@ void sensorLoop(unsigned long t) {
       char payload[1024];
       sprintf(payload, "{\"temperature\":%d}", sensorValue);
       mqttClient.publish(TB_TELEMETRY_TOPIC, payload);
+      Serial.print("Sensor Upload: ");
+      Serial.println(payload);
     } else {
       // TODO: append to queue
     }
