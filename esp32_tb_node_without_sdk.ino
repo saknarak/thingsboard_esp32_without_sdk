@@ -20,6 +20,7 @@
 #define WIFI_DISCONNECTED 0
 #define WIFI_CONNECTING 1
 #define WIFI_CONNECTED 2
+
 ////////////////////////////////////////
 // GLOBAL VARIABLES
 ////////////////////////////////////////
@@ -27,12 +28,6 @@ bool wifiReady = false;
 uint8_t wifiState = WIFI_DISCONNECTED;
 unsigned long wifiConnectTimer = 0;
 unsigned long wifiConnectTimeout = 10000;
-
-////////////////////////////////////////
-// FUNCTION HEADERS
-////////////////////////////////////////
-void wifiSetup();
-void wifiLoop();
 
 ////////////////////////////////////////
 // MAIN
