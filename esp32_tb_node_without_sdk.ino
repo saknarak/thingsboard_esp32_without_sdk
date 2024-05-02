@@ -87,8 +87,8 @@ void wifiSetup() {
 }
 
 void wifiLoop(unsigned long t) {
-  if (WiFi.status() != WL_CONNECTED) {
-    wifiReady = false;
+  wifiReady = WiFi.status() == WL_CONNECTED; 
+  if (!wifiReady) {
     if (wifiState == WIFI_CONNECTED) {
       Serial.println("WiFi Disconnected");
       wifiState = WIFI_DISCONNECTED;
@@ -100,7 +100,6 @@ void wifiLoop(unsigned long t) {
       wifiConnectTimer = t;
     }
   } else {
-    wifiReady = true;
     if (wifiState != WIFI_CONNECTED) {
       Serial.println("WiFi Connected");
       wifiState = WIFI_CONNECTED;
