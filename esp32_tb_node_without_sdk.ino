@@ -114,17 +114,19 @@ void mqttSetup() {
 }
 
 void mqttLoop(unsigned long t) {
-  if (!mqttClient.connected()) {
-    mqttReady = false;
+  mqttReady = mqttClient.connected();
+  if (!mqttReady) {
     if (mqttState == MQTT_CONNECTED) {
       Serial.println("MQTT disconnected");
       mqttState = MQTT_DISCONNECTED;
       mqttDelayTimer = t;
     }
     if (t - mqttDelayTimer > mqttDelayTimeout) {
-      mqttReady = true;
       mqttDelayTimer = t;
+      Serial.println("MQTT connecting...");
       if (mqttClient.connect(DEVICE_ACCESS_TOKEN)) {
+        Serial.println("MQTT connected...");
+        mqttReady = true;
         mqttState = MQTT_CONNECTED;
         // TODO: subscribe for shared attributes and rpc request
       }
