@@ -29,6 +29,7 @@
 #define MQTT_DISCONNECTED 0
 #define MQTT_CONNECTED 2
 #define MQTT_PACKET_SIZE 1024
+
 ////////////////////////////////////////
 // GLOBAL VARIABLES
 ////////////////////////////////////////
@@ -46,19 +47,6 @@ bool mqttReady = false;
 uint8_t mqttState = MQTT_DISCONNECTED;
 unsigned long mqttDelayTimer = 0;
 unsigned long mqttDelayTimeout = 5000;
-
-////////////////////////////////////////
-// FUNCTION HEADERS
-////////////////////////////////////////
-
-// WiFi
-void wifiSetup();
-void wifiLoop();
-
-// MQTT
-void mqttSetup();
-void mqttLoop();
-void mqttCallback(char *topic, byte *payload, unsigned int length);
 
 ////////////////////////////////////////
 // MAIN
