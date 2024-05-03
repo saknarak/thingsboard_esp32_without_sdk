@@ -18,9 +18,9 @@
 ////////////////////////////////////////
 #define WIFI_SSID "wlan_2.4G"
 #define WIFI_PASSWORD "0891560526"
-#define TB_MQTT_SERVER ""
+#define TB_MQTT_SERVER "192.168.1.106"
 #define TB_MQTT_PORT 1883
-#define DEVICE_ACCESS_TOKEN ""
+#define DEVICE_ACCESS_TOKEN "st5l8N7tbEYi95KCkQWZ"
 // -------------------------------------
 #define WIFI_DISCONNECTED 0
 #define WIFI_CONNECTING 1
@@ -47,7 +47,8 @@ bool mqttReady = false;
 uint8_t mqttState = MQTT_DISCONNECTED;
 unsigned long mqttDelayTimer = 0;
 unsigned long mqttDelayTimeout = 5000;
-
+uint64_t chipId = 0;
+char clientId[16];
 ////////////////////////////////////////
 // MAIN
 ////////////////////////////////////////
@@ -101,6 +102,10 @@ void mqttSetup() {
   mqttClient.setBufferSize(MQTT_PACKET_SIZE);
   mqttClient.setServer(TB_MQTT_SERVER, TB_MQTT_PORT);
   mqttClient.setCallback(mqttCallback);
+  chipId = ESP.getEfuseMac();
+  sprintf(clientId, "%08x", chipId);
+  Serial.print("MQTT clientId=");
+  Serial.println(clientId);
 }
 
 void mqttLoop(unsigned long t) {
@@ -114,6 +119,9 @@ void mqttLoop(unsigned long t) {
     if (t - mqttDelayTimer >= mqttDelayTimeout) {
       mqttDelayTimer = t;
       Serial.println("MQTT Connecting...");
+      
+      // clientId, username, password
+      mqttClient.connect(clientId, DEVICE_ACCESS_TOKEN, "");
       if (mqttClient.connect(DEVICE_ACCESS_TOKEN)) {
         Serial.println("MQTT Connected");
         mqttReady = true;
