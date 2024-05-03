@@ -200,7 +200,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   }
   // TODO: process rpc request
   if (strncmp(topic, TB_RPC_REQUEST_TOPIC, rpcTopicLen) == 0) {
-    unsigned long rpcReqId = atol(topc + rpcTopicLen);
+    unsigned int rpcReqId = atoi(topic + rpcTopicLen);
     processRpcRequest(rpcReqId, doc);
   }
   // TODO: process rpc resonse
@@ -302,7 +302,7 @@ void processSharedAttributes(JsonObject &shared) {
   }
 }
 
-void processRpcRequest(unsigned long reqId, DynamicJsonDocument &doc) {
+void processRpcRequest(unsigned int reqId, DynamicJsonDocument &doc) {
   if (!doc.containsKey("method")) {
     Serial.println("RPC: no method");
     rpcResponse(reqId, "{\"error\":\"no method\"}");
@@ -325,7 +325,7 @@ void processRpcRequest(unsigned long reqId, DynamicJsonDocument &doc) {
   return rpcResponse(reqId, "{\"error\":\"unknown method\"}");
 }
 
-void rpcResponse(unsigned long reqId, char *payload) {
+void rpcResponse(unsigned int reqId, char *payload) {
   char topic[256];
   sprintf(topic, "%s%l", TB_RPC_RESPONSE_TOPIC, reqId);
   mqttClient.publish(topic, payload);
