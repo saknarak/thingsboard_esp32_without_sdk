@@ -18,11 +18,11 @@
 ////////////////////////////////////////
 // DEFINES
 ////////////////////////////////////////
-#define WIFI_SSID "xenex-ap-5g"
+#define WIFI_SSID "wlan_2.4G"
 #define WIFI_PASSWORD "0891560526"
-#define TB_MQTT_SERVER ""
+#define TB_MQTT_SERVER "192.168.1.106"
 #define TB_MQTT_PORT 1883
-#define DEVICE_ACCESS_TOKEN ""
+#define DEVICE_ACCESS_TOKEN "st5l8N7tbEYi95KCkQWZ"
 #define ATTRIBUTE_KEYS "{\"clientKeys\":\"localIp\",\"sharedKeys\":\"uploadInterval,deviceMode\"}"
 #define JSON_DOC_SIZE 1024
 // -------------------------------------
@@ -41,6 +41,7 @@
 // https://thingsboard.io/docs/reference/mqtt-api/#request-attribute-values-from-the-server
 #define TB_ATTRIBUTE_REQUEST_TOPIC "v1/devices/me/attributes/request/"
 #define TB_ATTRIBUTE_RESPONSE_TOPIC "v1/devices/me/attributes/response/+"
+#define TB_ATTRIBUTE_SUBSCRIBE_TOPIC "v1/devices/me/attributes"
 #define TB_RPC_REQUEST_TOPIC "v1/devices/me/rpc/request/+"
 #define TB_RPC_RESPONSE_TOPIC "v1/devices/me/rpc/response/"
 
@@ -61,22 +62,24 @@ bool mqttReady = false;
 uint8_t mqttState = MQTT_DISCONNECTED;
 unsigned long mqttDelayTimer = 0;
 unsigned long mqttDelayTimeout = 5000;
+uint64_t chipId = 0;
+char clientId[16];
 
 // Sensor
 unsigned long sensorReadTimer = 0;
 unsigned long sensorReadInterval = 1000;
 unsigned long sensorUploadTimer = 0;
 unsigned long sensorUploadInterval = 5000;
-int16_t sensorValue = 0;
+int16_t sensorValue = 25;
 
 // Device Status
 unsigned long deviceStatusTimer = 0;
 unsigned long deviceStatusInterval = 10000;
 
 // Device Config
-unsigned long reqSeq = 1;
+unsigned int reqSeq = 1;
 uint8_t deviceMode = 1; // 1 = ON, 0 = OFF
-int resTopicLen = strlen(TB_ATTRIBUTE_RESPONSE_TOPIC) - 1;
+int resTopicLen = strlen(TB_ATTRIBUTE_RESPONSE_TOPIC) - 1; // v1/devices/me/attributes/response/+
 int rpcTopicLen = strlen(TB_RPC_REQUEST_TOPIC) - 1;
 ////////////////////////////////////////
 // MAIN
@@ -134,6 +137,10 @@ void mqttSetup() {
   mqttClient.setBufferSize(MQTT_PACKET_SIZE);
   mqttClient.setServer(TB_MQTT_SERVER, TB_MQTT_PORT);
   mqttClient.setCallback(mqttCallback);
+  chipId = ESP.getEfuseMac();
+  sprintf(clientId, "%08x", chipId);
+  Serial.print("MQTT clientId=");
+  Serial.println(clientId);
 }
 
 void mqttLoop(unsigned long t) {
@@ -147,6 +154,9 @@ void mqttLoop(unsigned long t) {
     if (t - mqttDelayTimer >= mqttDelayTimeout) {
       mqttDelayTimer = t;
       Serial.println("MQTT Connecting...");
+      
+      // clientId, username, password
+      mqttClient.connect(clientId, DEVICE_ACCESS_TOKEN, "");
       if (mqttClient.connect(DEVICE_ACCESS_TOKEN)) {
         Serial.println("MQTT Connected");
         mqttReady = true;
@@ -155,11 +165,10 @@ void mqttLoop(unsigned long t) {
         char topic[128];
         sprintf(topic, "%s%c", TB_ATTRIBUTE_RESPONSE_TOPIC, '+');
         mqttClient.subscribe(topic);
-        
+        mqttClient.subscribe(TB_ATTRIBUTE_SUBSCRIBE_TOPIC);
         mqttClient.subscribe(TB_RPC_REQUEST_TOPIC);
 
         deviceConfigRequest();
-
         deviceStatusUpload();
       }
     }
@@ -167,7 +176,9 @@ void mqttLoop(unsigned long t) {
     mqttClient.loop();
   }
 }
+
 void mqttCallback(char *topic, byte *payload, unsigned int length) {
+  Serial.printf("GOT: %d\n", length);
   // expect paylaod to be JSON
   DynamicJsonDocument doc(JSON_DOC_SIZE);
   char json[MQTT_PACKET_SIZE];
@@ -181,7 +192,11 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
 
   // TODO: process shared attributes changed
   if (strncmp(topic, TB_ATTRIBUTE_RESPONSE_TOPIC, resTopicLen) == 0) {
-    processAttributeChange(doc);
+    processAttributeResponse(doc);
+  }
+  if (strcmp(topic, TB_ATTRIBUTE_SUBSCRIBE_TOPIC) == 0) {
+    JsonObject obj = doc.as<JsonObject>();
+    processSharedAttributes(obj);
   }
   // TODO: process rpc request
   if (strncmp(topic, TB_RPC_REQUEST_TOPIC, rpcTopicLen) == 0) {
@@ -201,11 +216,12 @@ void sensorLoop(unsigned long t) {
     sensorReadTimer = t;
     
     int prevValue = sensorValue;
-    sensorValue = sensorValue + random(0, 3) - 1;
+    int rnd = random(0, 10);
+    sensorValue = sensorValue + (rnd == 0 ? -1 : ( rnd == 9 ? 1 : 0));
     if (prevValue != sensorValue) {
       sensorUploadTimer = 0; // force upload
     }
-    Serial.printf("Sensor: new=%d prev=%d", sensorValue, prevValue);
+    // Serial.printf("Sensor: new=%d prev=%d\n", sensorValue, prevValue);
   }
 
   if (t - sensorUploadTimer >= sensorUploadInterval) {
@@ -254,30 +270,34 @@ void deviceStatusUpload() {
 
 void deviceConfigRequest() {
   char topic[256];
-  sprintf(topic, "%s%l", TB_ATTRIBUTE_REQUEST_TOPIC, reqSeq++);
-  mqttClient.publish(TB_ATTRIBUTE_REQUEST_TOPIC, ATTRIBUTE_KEYS);
+  sprintf(topic, "%s%d", TB_ATTRIBUTE_REQUEST_TOPIC, reqSeq++);
+  mqttClient.publish(topic, ATTRIBUTE_KEYS);
 }
 
-void processAttributeChange(DynamicJsonDocument &doc) {
+void processAttributeResponse(DynamicJsonDocument &doc) {
   if (doc.containsKey("client")) {
     // TODO: process client attributes
   }
   if (doc.containsKey("shared")) {
     // process shared attributes
     JsonObject shared = doc["shared"];
-    if (shared.containsKey("uploadInterval")) {
-      unsigned long newInterval = shared["uploadInterval"].as<unsigned long>();
-      if (newInterval >= 1000 && newInterval <= 60000) {
-        sensorUploadInterval = newInterval;
-        Serial.printf("Config: sensorUploadInterval=%d", sensorUploadInterval);
-      }
+    processSharedAttributes(shared);
+  }
+}
+
+void processSharedAttributes(JsonObject &shared) {
+  if (shared.containsKey("uploadInterval")) {
+    unsigned long newInterval = shared["uploadInterval"].as<unsigned long>();
+    if (newInterval >= 1000 && newInterval <= 60000) {
+      sensorUploadInterval = newInterval;
+      Serial.printf("Config: sensorUploadInterval=%d\n", sensorUploadInterval);
     }
-    if (shared.containsKey("deviceMode")) {
-      uint8_t newMode = shared["deviceMode"].as<uint8_t>();
-      if (newMode >= 0 && newMode <= 1) {
-        deviceMode = newMode;
-        Serial.printf("Config: deviceMode=%d", deviceMode);
-      }
+  }
+  if (shared.containsKey("deviceMode")) {
+    uint8_t newMode = shared["deviceMode"].as<uint8_t>();
+    if (newMode >= 0 && newMode <= 1) {
+      deviceMode = newMode;
+      Serial.printf("Config: deviceMode=%d\n", deviceMode);
     }
   }
 }
