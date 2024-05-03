@@ -16,7 +16,7 @@
 ////////////////////////////////////////
 // DEFINES
 ////////////////////////////////////////
-#define WIFI_SSID "xenex-ap-5g"
+#define WIFI_SSID "wlan_2.4G"
 #define WIFI_PASSWORD "0891560526"
 #define TB_MQTT_SERVER ""
 #define TB_MQTT_PORT 1883
