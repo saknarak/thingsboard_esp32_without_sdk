@@ -74,7 +74,7 @@ unsigned long deviceStatusTimer = 0;
 unsigned long deviceStatusInterval = 10000;
 
 // Device Config
-unsigned long reqSeq = 1;
+unsigned int reqSeq = 1;
 uint8_t deviceMode = 1; // 1 = ON, 0 = OFF
 int resTopicLen = strlen(TB_ATTRIBUTE_RESPONSE_TOPIC) - 1; // v1/devices/me/attributes/response/+
 
