@@ -41,7 +41,7 @@
 // https://thingsboard.io/docs/reference/mqtt-api/#request-attribute-values-from-the-server
 #define TB_ATTRIBUTE_REQUEST_TOPIC "v1/devices/me/attributes/request/"
 #define TB_ATTRIBUTE_RESPONSE_TOPIC "v1/devices/me/attributes/response/+"
-
+#define TB_ATTRIBUTE_SUBSCRIBE_TOPIC "v1/devices/me/attributes"
 ////////////////////////////////////////
 // GLOBAL VARIABLES
 ////////////////////////////////////////
@@ -76,7 +76,7 @@ unsigned long deviceStatusInterval = 10000;
 // Device Config
 unsigned long reqSeq = 1;
 uint8_t deviceMode = 1; // 1 = ON, 0 = OFF
-int resTopicLen = strlen(TB_ATTRIBUTE_RESPONSE_TOPIC) - 1;
+int resTopicLen = strlen(TB_ATTRIBUTE_RESPONSE_TOPIC) - 1; // v1/devices/me/attributes/response/+
 
 ////////////////////////////////////////
 // MAIN
@@ -160,8 +160,8 @@ void mqttLoop(unsigned long t) {
         mqttState = MQTT_CONNECTED;
         // TODO: subscribe for shared attributes and rpc request
         char topic[128];
-        sprintf(topic, "%s%c", TB_ATTRIBUTE_RESPONSE_TOPIC, '+');
-        mqttClient.subscribe(topic);
+        mqttClient.subscribe(TB_ATTRIBUTE_RESPONSE_TOPIC);
+        mqttClient.subscribe(TB_ATTRIBUTE_SUBSCRIBE_TOPIC);
         deviceConfigRequest();
 
         deviceStatusUpload();
@@ -171,7 +171,9 @@ void mqttLoop(unsigned long t) {
     mqttClient.loop();
   }
 }
+
 void mqttCallback(char *topic, byte *payload, unsigned int length) {
+  Serial.printf("GOT: %d\n", length);
   // expect paylaod to be JSON
   DynamicJsonDocument doc(JSON_DOC_SIZE);
   char json[MQTT_PACKET_SIZE];
@@ -185,7 +187,11 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
 
   // TODO: process shared attributes changed
   if (strncmp(topic, TB_ATTRIBUTE_RESPONSE_TOPIC, resTopicLen) == 0) {
-    processAttributeChange(doc);
+    processAttributeResponse(doc);
+  }
+  if (strcmp(topic, TB_ATTRIBUTE_SUBSCRIBE_TOPIC) == 0) {
+    JsonObject obj = doc.as<JsonObject>();
+    processSharedAttributes(obj);
   }
   // TODO: process rpc request
   // TODO: process rpc resonse
@@ -206,7 +212,7 @@ void sensorLoop(unsigned long t) {
     if (prevValue != sensorValue) {
       sensorUploadTimer = 0; // force upload
     }
-    Serial.printf("Sensor: new=%d prev=%d\n", sensorValue, prevValue);
+    // Serial.printf("Sensor: new=%d prev=%d\n", sensorValue, prevValue);
   }
 
   if (t - sensorUploadTimer >= sensorUploadInterval) {
@@ -256,29 +262,34 @@ void deviceStatusUpload() {
 void deviceConfigRequest() {
   char topic[256];
   sprintf(topic, "%s%d", TB_ATTRIBUTE_REQUEST_TOPIC, reqSeq++);
-  mqttClient.publish(TB_ATTRIBUTE_REQUEST_TOPIC, ATTRIBUTE_KEYS);
+  mqttClient.publish(topic, ATTRIBUTE_KEYS);
+  Serial.printf("attribute request topic=%s payload=%s\n", topic, ATTRIBUTE_KEYS);
 }
 
-void processAttributeChange(DynamicJsonDocument &doc) {
+void processAttributeResponse(DynamicJsonDocument &doc) {
   if (doc.containsKey("client")) {
     // TODO: process client attributes
   }
   if (doc.containsKey("shared")) {
     // process shared attributes
     JsonObject shared = doc["shared"];
-    if (shared.containsKey("uploadInterval")) {
-      unsigned long newInterval = shared["uploadInterval"].as<unsigned long>();
-      if (newInterval >= 1000 && newInterval <= 60000) {
-        sensorUploadInterval = newInterval;
-        Serial.printf("Config: sensorUploadInterval=%d", sensorUploadInterval);
-      }
+    processSharedAttributes(shared);
+  }
+}
+
+void processSharedAttributes(JsonObject &shared) {
+  if (shared.containsKey("uploadInterval")) {
+    unsigned long newInterval = shared["uploadInterval"].as<unsigned long>();
+    if (newInterval >= 1000 && newInterval <= 60000) {
+      sensorUploadInterval = newInterval;
+      Serial.printf("Config: sensorUploadInterval=%d\n", sensorUploadInterval);
     }
-    if (shared.containsKey("deviceMode")) {
-      uint8_t newMode = shared["deviceMode"].as<uint8_t>();
-      if (newMode >= 0 && newMode <= 1) {
-        deviceMode = newMode;
-        Serial.printf("Config: deviceMode=%d", deviceMode);
-      }
+  }
+  if (shared.containsKey("deviceMode")) {
+    uint8_t newMode = shared["deviceMode"].as<uint8_t>();
+    if (newMode >= 0 && newMode <= 1) {
+      deviceMode = newMode;
+      Serial.printf("Config: deviceMode=%d\n", deviceMode);
     }
   }
 }
