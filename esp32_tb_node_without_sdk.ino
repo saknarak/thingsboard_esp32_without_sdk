@@ -16,11 +16,11 @@
 ////////////////////////////////////////
 // DEFINES
 ////////////////////////////////////////
-#define WIFI_SSID "xenex-ap-5g"
+#define WIFI_SSID "wlan_2.4G"
 #define WIFI_PASSWORD "0891560526"
-#define TB_MQTT_SERVER ""
+#define TB_MQTT_SERVER "192.168.1.106"
 #define TB_MQTT_PORT 1883
-#define DEVICE_ACCESS_TOKEN ""
+#define DEVICE_ACCESS_TOKEN "st5l8N7tbEYi95KCkQWZ"
 // -------------------------------------
 #define WIFI_DISCONNECTED 0
 #define WIFI_CONNECTING 1
@@ -52,13 +52,15 @@ bool mqttReady = false;
 uint8_t mqttState = MQTT_DISCONNECTED;
 unsigned long mqttDelayTimer = 0;
 unsigned long mqttDelayTimeout = 5000;
+uint64_t chipId = 0;
+char clientId[16];
 
 // Sensor
 unsigned long sensorReadTimer = 0;
 unsigned long sensorReadInterval = 1000;
 unsigned long sensorUploadTimer = 0;
 unsigned long sensorUploadInterval = 5000;
-int16_t sensorValue = 0;
+int16_t sensorValue = 25;
 
 // Device Status
 unsigned long deviceStatusTimer = 0;
@@ -120,6 +122,10 @@ void mqttSetup() {
   mqttClient.setBufferSize(MQTT_PACKET_SIZE);
   mqttClient.setServer(TB_MQTT_SERVER, TB_MQTT_PORT);
   mqttClient.setCallback(mqttCallback);
+  chipId = ESP.getEfuseMac();
+  sprintf(clientId, "%08x", chipId);
+  Serial.print("MQTT clientId=");
+  Serial.println(clientId);
 }
 
 void mqttLoop(unsigned long t) {
@@ -133,6 +139,9 @@ void mqttLoop(unsigned long t) {
     if (t - mqttDelayTimer >= mqttDelayTimeout) {
       mqttDelayTimer = t;
       Serial.println("MQTT Connecting...");
+      
+      // clientId, username, password
+      mqttClient.connect(clientId, DEVICE_ACCESS_TOKEN, "");
       if (mqttClient.connect(DEVICE_ACCESS_TOKEN)) {
         Serial.println("MQTT Connected");
         mqttReady = true;
@@ -163,11 +172,12 @@ void sensorLoop(unsigned long t) {
     sensorReadTimer = t;
     
     int prevValue = sensorValue;
-    sensorValue = sensorValue + random(0, 3) - 1;
+    int rnd = random(0, 10);
+    sensorValue = sensorValue + (rnd == 0 ? -1 : ( rnd == 9 ? 1 : 0));
     if (prevValue != sensorValue) {
       sensorUploadTimer = 0; // force upload
     }
-    Serial.printf("Sensor: new=%d prev=%d", sensorValue, prevValue);
+    Serial.printf("Sensor: new=%d prev=%d\n", sensorValue, prevValue);
   }
 
   if (t - sensorUploadTimer >= sensorUploadInterval) {
