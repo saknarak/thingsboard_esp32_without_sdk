@@ -41,6 +41,8 @@
 // https://thingsboard.io/docs/reference/mqtt-api/#request-attribute-values-from-the-server
 #define TB_ATTRIBUTE_REQUEST_TOPIC "v1/devices/me/attributes/request/"
 #define TB_ATTRIBUTE_RESPONSE_TOPIC "v1/devices/me/attributes/response/+"
+#define TB_RPC_REQUEST_TOPIC "v1/devices/me/rpc/request/+"
+#define TB_RPC_RESPONSE_TOPIC "v1/devices/me/rpc/response/"
 
 ////////////////////////////////////////
 // GLOBAL VARIABLES
@@ -75,7 +77,7 @@ unsigned long deviceStatusInterval = 10000;
 unsigned long reqSeq = 1;
 uint8_t deviceMode = 1; // 1 = ON, 0 = OFF
 int resTopicLen = strlen(TB_ATTRIBUTE_RESPONSE_TOPIC) - 1;
-
+int rpcTopicLen = strlen(TB_RPC_REQUEST_TOPIC) - 1;
 ////////////////////////////////////////
 // MAIN
 ////////////////////////////////////////
@@ -149,10 +151,13 @@ void mqttLoop(unsigned long t) {
         Serial.println("MQTT Connected");
         mqttReady = true;
         mqttState = MQTT_CONNECTED;
-        // TODO: subscribe for shared attributes and rpc request
+
         char topic[128];
         sprintf(topic, "%s%c", TB_ATTRIBUTE_RESPONSE_TOPIC, '+');
         mqttClient.subscribe(topic);
+        
+        mqttClient.subscribe(TB_RPC_REQUEST_TOPIC);
+
         deviceConfigRequest();
 
         deviceStatusUpload();
@@ -179,6 +184,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     processAttributeChange(doc);
   }
   // TODO: process rpc request
+  if (strncmp(topic, TB_RPC_REQUEST_TOPIC, rpcTopicLen) == 0) {
+    unsigned long rpcReqId = atol(topc + rpcTopicLen);
+    processRpcRequest(rpcReqId, doc);
+  }
   // TODO: process rpc resonse
 }
 
@@ -245,7 +254,7 @@ void deviceStatusUpload() {
 
 void deviceConfigRequest() {
   char topic[256];
-  sprintf(topic, "%s%d", TB_ATTRIBUTE_REQUEST_TOPIC, reqSeq++);
+  sprintf(topic, "%s%l", TB_ATTRIBUTE_REQUEST_TOPIC, reqSeq++);
   mqttClient.publish(TB_ATTRIBUTE_REQUEST_TOPIC, ATTRIBUTE_KEYS);
 }
 
@@ -273,3 +282,31 @@ void processAttributeChange(DynamicJsonDocument &doc) {
   }
 }
 
+void processRpcRequest(unsigned long reqId, DynamicJsonDocument &doc) {
+  if (!doc.containsKey("method")) {
+    Serial.println("RPC: no method");
+    rpcResponse(reqId, "{\"error\":\"no method\"}");
+    return;
+  }
+  char method[256];
+  strlcpy(method, doc["method"], sizeof(method));
+
+  if (strcmp(method, "reset") == 0) {
+    // param: 1000ms
+    // TODO: reset with daly
+    int delay = doc["param"];
+    Serial.printf("RPC: reset delay=%d\n", delay);
+    return rpcResponse(reqId, "{\"ok\":1}");
+    // processReset(doc["param"] | 0);
+  } else if (strcmp(method, "") == 0) {
+
+  }
+  
+  return rpcResponse(reqId, "{\"error\":\"unknown method\"}");
+}
+
+void rpcResponse(unsigned long reqId, char *payload) {
+  char topic[256];
+  sprintf(topic, "%s%l", TB_RPC_RESPONSE_TOPIC, reqId);
+  mqttClient.publish(topic, payload);
+}
