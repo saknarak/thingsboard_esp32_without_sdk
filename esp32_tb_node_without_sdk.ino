@@ -109,6 +109,9 @@ void mqttSetup() {
 }
 
 void mqttLoop(unsigned long t) {
+  if (!wifiReady) {
+    return;
+  }
   mqttReady = mqttClient.connected();
   if (!mqttReady) {
     if (mqttState == MQTT_CONNECTED) {
@@ -121,8 +124,7 @@ void mqttLoop(unsigned long t) {
       Serial.println("MQTT Connecting...");
       
       // clientId, username, password
-      mqttClient.connect(clientId, DEVICE_ACCESS_TOKEN, "");
-      if (mqttClient.connect(DEVICE_ACCESS_TOKEN)) {
+      if (mqttClient.connect(clientId, DEVICE_ACCESS_TOKEN, "")) {
         Serial.println("MQTT Connected");
         mqttReady = true;
         mqttState = MQTT_CONNECTED;
