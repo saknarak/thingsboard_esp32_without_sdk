@@ -18,7 +18,7 @@
 ////////////////////////////////////////
 #define WIFI_SSID "wlan_2.4G"
 #define WIFI_PASSWORD "0891560526"
-#define TB_MQTT_SERVER "192.168.1.106"
+#define TB_MQTT_SERVER "broker.hivemq.com"
 #define TB_MQTT_PORT 1883
 #define DEVICE_ACCESS_TOKEN "st5l8N7tbEYi95KCkQWZ"
 // -------------------------------------
@@ -49,6 +49,11 @@ unsigned long mqttDelayTimer = 0;
 unsigned long mqttDelayTimeout = 5000;
 uint64_t chipId = 0;
 char clientId[16];
+
+int seq = 0;
+unsigned long publishTimer = 0;
+unsigned long publishInterval = 5000;
+
 ////////////////////////////////////////
 // MAIN
 ////////////////////////////////////////
@@ -123,15 +128,28 @@ void mqttLoop(unsigned long t) {
       mqttDelayTimer = t;
       Serial.println("MQTT Connecting...");
       
-      // clientId, username, password
-      if (mqttClient.connect(clientId, DEVICE_ACCESS_TOKEN, "")) {
+      // clientId, no username, no password
+      if (mqttClient.connect(clientId)) {
         Serial.println("MQTT Connected");
         mqttReady = true;
         mqttState = MQTT_CONNECTED;
         // TODO: subscribe for shared attributes and rpc request
+        mqttClient.subscribe("somsak");
       }
     }
   } else {
+    if (t - publishTimer >= publishInterval) {
+      publishTimer = t;
+      
+      char payload[64];
+      sprintf(payload, "ok=%d hex=%x", seq, seq);
+      seq++;
+      mqttClient.publish("my-data", payload);
+      
+      Serial.print("Publish topic=my-data payload=");
+      Serial.println(payload);
+    }
+
     mqttClient.loop();
   }
 }
@@ -140,4 +158,11 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // TODO: process shared attributes changed
   // TODO: process rpc request
   // TODO: process rpc resonse
+  Serial.printf("topic=%s len=%d\n", topic, length);
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]); // 'd' 97 1xx 97
+  }
+  Serial.println();
+  // payload[4] = 0;
+  // Serial.println(name); // dataXYZ
 }
