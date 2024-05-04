@@ -27,7 +27,7 @@
 bool wifiReady = false;
 uint8_t wifiState = WIFI_DISCONNECTED;
 unsigned long wifiConnectTimer = 0;
-unsigned long wifiConnectTimeout = 10000;
+unsigned long wifiConnectTimeout = 20000;
 
 ////////////////////////////////////////
 // MAIN
