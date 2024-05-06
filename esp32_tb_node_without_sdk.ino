@@ -53,7 +53,7 @@
 bool wifiReady = false;
 uint8_t wifiState = WIFI_DISCONNECTED;
 unsigned long wifiConnectTimer = 0;
-unsigned long wifiConnectTimeout = 10000;
+unsigned long wifiConnectTimeout = 20000;
 
 // MQTT
 WiFiClient wifiClient;
@@ -144,6 +144,9 @@ void mqttSetup() {
 }
 
 void mqttLoop(unsigned long t) {
+  if (!wifiReady) {
+    return;
+  }
   mqttReady = mqttClient.connected();
   if (!mqttReady) {
     if (mqttState == MQTT_CONNECTED) {
@@ -156,8 +159,7 @@ void mqttLoop(unsigned long t) {
       Serial.println("MQTT Connecting...");
       
       // clientId, username, password
-      mqttClient.connect(clientId, DEVICE_ACCESS_TOKEN, "");
-      if (mqttClient.connect(DEVICE_ACCESS_TOKEN)) {
+      if (mqttClient.connect(clientId, DEVICE_ACCESS_TOKEN, "")) {
         Serial.println("MQTT Connected");
         mqttReady = true;
         mqttState = MQTT_CONNECTED;
@@ -170,6 +172,7 @@ void mqttLoop(unsigned long t) {
 
         deviceConfigRequest();
         deviceStatusUpload();
+        deviceStatusTimer = t;
       }
     }
   } else {
@@ -181,10 +184,11 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   Serial.printf("GOT: %d\n", length);
   // expect paylaod to be JSON
   DynamicJsonDocument doc(JSON_DOC_SIZE);
-  char json[MQTT_PACKET_SIZE];
-  memcpy(json, payload, length);
-  json[length] = 0;
-  DeserializationError err = deserializeJson(doc, json);
+  // char json[MQTT_PACKET_SIZE];
+  // memcpy(json, payload, length);
+  // json[length] = 0;
+  // Serial.println(json); // {"ok":1}\0 === 8, length == 9
+  DeserializationError err = deserializeJson(doc, (char *)payload, length);
   if (err) {
     Serial.println("Not a valid json");
     return;
@@ -193,8 +197,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // TODO: process shared attributes changed
   if (strncmp(topic, TB_ATTRIBUTE_RESPONSE_TOPIC, resTopicLen) == 0) {
     processAttributeResponse(doc);
-  }
-  if (strcmp(topic, TB_ATTRIBUTE_SUBSCRIBE_TOPIC) == 0) {
+  } else if (strcmp(topic, TB_ATTRIBUTE_SUBSCRIBE_TOPIC) == 0) {
     JsonObject obj = doc.as<JsonObject>();
     processSharedAttributes(obj);
   }
