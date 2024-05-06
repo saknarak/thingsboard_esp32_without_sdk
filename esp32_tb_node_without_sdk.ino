@@ -179,11 +179,11 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   Serial.printf("GOT: %d\n", length);
   // expect paylaod to be JSON
   DynamicJsonDocument doc(JSON_DOC_SIZE);
-  char json[MQTT_PACKET_SIZE];
-  memcpy(json, payload, length);
-  json[length] = 0;
-  Serial.println(json); // {"ok":1}\0 === 8, length == 9
-  DeserializationError err = deserializeJson(doc, json);
+  // char json[MQTT_PACKET_SIZE];
+  // memcpy(json, payload, length);
+  // json[length] = 0;
+  // Serial.println(json); // {"ok":1}\0 === 8, length == 9
+  DeserializationError err = deserializeJson(doc, (char *)payload, length);
   if (err) {
     Serial.println("Not a valid json");
     return;
