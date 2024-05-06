@@ -203,7 +203,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   }
   // TODO: process rpc request
   if (strncmp(topic, TB_RPC_REQUEST_TOPIC, rpcTopicLen) == 0) {
-    unsigned int rpcReqId = atoi(topic + rpcTopicLen);
+    unsigned int rpcReqId = atoi(topic + rpcTopicLen); // atoi string => int
     processRpcRequest(rpcReqId, doc);
   }
   // TODO: process rpc resonse
@@ -311,13 +311,13 @@ void processRpcRequest(unsigned int reqId, DynamicJsonDocument &doc) {
     rpcResponse(reqId, "{\"error\":\"no method\"}");
     return;
   }
-  char method[256];
+  char method[100];
   strlcpy(method, doc["method"], sizeof(method));
 
   if (strcmp(method, "reset") == 0) {
     // param: 1000ms
     // TODO: reset with daly
-    int delay = doc["param"];
+    int delay = doc["params"];
     Serial.printf("RPC: reset delay=%d\n", delay);
     return rpcResponse(reqId, "{\"ok\":1}");
     // processReset(doc["param"] | 0);
@@ -330,6 +330,6 @@ void processRpcRequest(unsigned int reqId, DynamicJsonDocument &doc) {
 
 void rpcResponse(unsigned int reqId, char *payload) {
   char topic[256];
-  sprintf(topic, "%s%l", TB_RPC_RESPONSE_TOPIC, reqId);
+  sprintf(topic, "%s%d", TB_RPC_RESPONSE_TOPIC, reqId);
   mqttClient.publish(topic, payload);
 }
