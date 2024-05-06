@@ -151,6 +151,7 @@ void mqttLoop(unsigned long t) {
         // TODO: subscribe for shared attributes and rpc request
 
         deviceStatusUpload();
+        deviceStatusTimer = t;
       }
     }
   } else {
