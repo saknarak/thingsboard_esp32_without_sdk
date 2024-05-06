@@ -50,7 +50,7 @@
 bool wifiReady = false;
 uint8_t wifiState = WIFI_DISCONNECTED;
 unsigned long wifiConnectTimer = 0;
-unsigned long wifiConnectTimeout = 10000;
+unsigned long wifiConnectTimeout = 20000;
 
 // MQTT
 WiFiClient wifiClient;
@@ -141,6 +141,9 @@ void mqttSetup() {
 }
 
 void mqttLoop(unsigned long t) {
+  if (!wifiReady) {
+    return;
+  }
   mqttReady = mqttClient.connected();
   if (!mqttReady) {
     if (mqttState == MQTT_CONNECTED) {
@@ -153,8 +156,7 @@ void mqttLoop(unsigned long t) {
       Serial.println("MQTT Connecting...");
       
       // clientId, username, password
-      mqttClient.connect(clientId, DEVICE_ACCESS_TOKEN, "");
-      if (mqttClient.connect(DEVICE_ACCESS_TOKEN)) {
+      if (mqttClient.connect(clientId, DEVICE_ACCESS_TOKEN, "")) {
         Serial.println("MQTT Connected");
         mqttReady = true;
         mqttState = MQTT_CONNECTED;
@@ -165,6 +167,7 @@ void mqttLoop(unsigned long t) {
         deviceConfigRequest();
 
         deviceStatusUpload();
+        deviceStatusTimer = t;
       }
     }
   } else {
