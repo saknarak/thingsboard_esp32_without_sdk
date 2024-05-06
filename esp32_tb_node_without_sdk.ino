@@ -182,6 +182,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   char json[MQTT_PACKET_SIZE];
   memcpy(json, payload, length);
   json[length] = 0;
+  Serial.println(json); // {"ok":1}\0 === 8, length == 9
   DeserializationError err = deserializeJson(doc, json);
   if (err) {
     Serial.println("Not a valid json");
@@ -191,8 +192,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // TODO: process shared attributes changed
   if (strncmp(topic, TB_ATTRIBUTE_RESPONSE_TOPIC, resTopicLen) == 0) {
     processAttributeResponse(doc);
-  }
-  if (strcmp(topic, TB_ATTRIBUTE_SUBSCRIBE_TOPIC) == 0) {
+  } else if (strcmp(topic, TB_ATTRIBUTE_SUBSCRIBE_TOPIC) == 0) {
     JsonObject obj = doc.as<JsonObject>();
     processSharedAttributes(obj);
   }
