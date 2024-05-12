@@ -24,7 +24,7 @@
 #define WIFI_PASSWORD "0891560526"
 #define TB_MQTT_SERVER "192.168.1.103"
 #define TB_MQTT_PORT 1883
-#define DEVICE_ACCESS_TOKEN "st5l8N7tbEYi95KCkQWZ"
+#define DEVICE_ACCESS_TOKEN "g8cnzpG7i5cPL2yBN0Za"
 #define DHT22_PIN 23
 #define ATTRIBUTE_KEYS "{\"clientKeys\":\"localIp\",\"sharedKeys\":\"uploadInterval,deviceMode\"}"
 #define JSON_DOC_SIZE 1024
@@ -233,16 +233,34 @@ void sensorLoop(unsigned long t) {
     sensorReadTimer = t;
     
     if (fan == 0) {
-      temperature -= random(5, 11) / 10;
-      humidity += random(5, 11) / 10;
+      temperature -= 1.0 * random(5, 11) / 10.0;
+      humidity += 1.0 * random(5, 11) / 10.0;
+      if (temperature <= 20) {
+        temperature = 20;
+      }
+      if (humidity >= 90) {
+        humidity = 90;
+      }
     } else {
-      temperature += random(5, 11) / 10;
-      humidity -= random(5, 11) / 10;
+      temperature += 1.0 * random(5, 11) / 10.0;
+      humidity -= 1.0 * random(5, 11) / 10.0;
+      if (temperature > 45) {
+        temperature = 45;
+      }
+      if (humidity <= 20) {
+        humidity = 20;
+      }
     }
     if (water == 0) {
-      soilMoisure -= random(10, 21) / 10;
+      soilMoisure -= 1.0 * random(10, 21) / 10.0;
+      if (soilMoisure <= 20) {
+        soilMoisure = 20;
+      }
     } else {
-      soilMoisure += random(30, 51) / 10;
+      soilMoisure += 1.0 * random(30, 51) / 10.0;
+      if (soilMoisure >= 95) {
+        soilMoisure = 95;
+      }
     }
     sensorUploadTimer = 0;
   }
