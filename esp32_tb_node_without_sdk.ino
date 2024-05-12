@@ -16,10 +16,11 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <DHT22.h>
-
+#include <Update.h>
 ////////////////////////////////////////
 // DEFINES
 ////////////////////////////////////////
+#define FW_VERSION "0.1"
 #define WIFI_SSID "wlan_2.4G"
 #define WIFI_PASSWORD "0891560526"
 #define TB_MQTT_SERVER "192.168.1.103"
@@ -49,7 +50,8 @@
 #define TB_ATTRIBUTE_SUBSCRIBE_TOPIC "v1/devices/me/attributes"
 #define TB_RPC_REQUEST_TOPIC "v1/devices/me/rpc/request/+"
 #define TB_RPC_RESPONSE_TOPIC "v1/devices/me/rpc/response/"
-
+#define TB_OTA_SUBSCRIBE_TOPIC "v2/fw/response/+/chunk/+"
+#define TB_OTA_REQUEST_TOPIC "v2/fw/request/%d/chunk/%d"
 ////////////////////////////////////////
 // GLOBAL VARIABLES
 ////////////////////////////////////////
@@ -91,6 +93,11 @@ uint8_t fan = 0;
 uint8_t water = 0;
 int resTopicLen = strlen(TB_ATTRIBUTE_RESPONSE_TOPIC) - 1; // v1/devices/me/attributes/response/+
 int rpcTopicLen = strlen(TB_RPC_REQUEST_TOPIC) - 1;
+
+// OTA
+int otaId = 1;
+int otaIndex = 0;
+
 ////////////////////////////////////////
 // MAIN
 ////////////////////////////////////////
@@ -179,6 +186,7 @@ void mqttLoop(unsigned long t) {
         mqttClient.subscribe(topic);
         mqttClient.subscribe(TB_ATTRIBUTE_SUBSCRIBE_TOPIC);
         mqttClient.subscribe(TB_RPC_REQUEST_TOPIC);
+        mqttClient.subscribe(TB_OTA_SUBSCRIBE_TOPIC);
 
         deviceConfigRequest();
         deviceStatusUpload();
@@ -191,8 +199,29 @@ void mqttLoop(unsigned long t) {
 }
 
 void mqttCallback(char *topic, byte *payload, unsigned int length) {
-  Serial.printf("GOT: %d\n", length);
+  Serial.printf("GOT: %s %d\n", topic, length);
   // expect paylaod to be JSON
+  if (strncmp(topic, "v2/fw/response/", 14) == 0) {
+    if (length > 0) {
+      Update.write(payload, length);
+      char otaTopic[100];
+      sprintf(otaTopic, TB_OTA_REQUEST_TOPIC, otaId, otaIndex);
+      Serial.println(otaTopic);
+      mqttClient.publish(otaTopic, "512");
+      otaIndex++;
+    } else {
+      Update.end();
+      if (Update.isFinished()) {
+        Serial.println("OTA Success");
+        ESP.restart();
+      } else {
+        Serial.println("OTA Failed");
+      }
+    }
+    return;
+  }
+
+
   DynamicJsonDocument doc(JSON_DOC_SIZE);
   // char json[MQTT_PACKET_SIZE];
   // memcpy(json, payload, length);
@@ -294,7 +323,8 @@ void deviceStatusUpload() {
   char payload[1024];
   multi_heap_info_t info;
   heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-  sprintf(payload, "{\"rssi\":%d,\"channel\":%d,\"bssid\":\"%s\",\"localIp\":\"%s\",\"ssid\":\"%s\",\"totalFree\":%d,\"minFree\":%d,\"largeFree\":%d,\"fan\":%d,\"water\":%d}",
+  sprintf(payload, "{\"fw_ver\":\"%s\",\"rssi\":%d,\"channel\":%d,\"bssid\":\"%s\",\"localIp\":\"%s\",\"ssid\":\"%s\",\"totalFree\":%d,\"minFree\":%d,\"largeFree\":%d,\"fan\":%d,\"water\":%d}",
+    FW_VERSION,
     WiFi.RSSI(),
     WiFi.channel(),
     WiFi.BSSIDstr().c_str(),
@@ -329,6 +359,7 @@ void processAttributeResponse(DynamicJsonDocument &doc) {
 }
 
 void processSharedAttributes(JsonObject &shared) {
+  Serial.println("GOT Shared");
   if (shared.containsKey("uploadInterval")) {
     unsigned long newInterval = shared["uploadInterval"].as<unsigned long>();
     if (newInterval >= 1000 && newInterval <= 60000) {
@@ -353,6 +384,17 @@ void processSharedAttributes(JsonObject &shared) {
       deviceStatusUpload();
       Serial.printf("Config: water=%d\n", water);
     }
+  }
+  if (shared.containsKey("fw_version")) {
+    Serial.print("GET: fw_version size=");
+    long fwSize = shared["fw_size"];
+    Serial.println(fwSize); 
+    Update.begin(fwSize);
+    char otaTopic[100];
+    sprintf(otaTopic, TB_OTA_REQUEST_TOPIC, otaId, otaIndex);
+    Serial.println(otaTopic);
+    mqttClient.publish(otaTopic, "512");
+    otaIndex++;
   }
 }
 
