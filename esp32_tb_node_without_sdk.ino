@@ -307,7 +307,7 @@ void processSharedAttributes(JsonObject &shared) {
     uint8_t newMode = shared["deviceMode"].as<uint8_t>();
     if (newMode >= 0 && newMode <= 1) {
       deviceMode = newMode;
-      digital(LED_PIN, deviceMode);
+      digitalWrite(LED_PIN, deviceMode);
       deviceStatusUpload();
       Serial.printf("Config: deviceMode=%d\n", deviceMode);
     }
