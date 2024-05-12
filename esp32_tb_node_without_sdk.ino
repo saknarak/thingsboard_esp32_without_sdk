@@ -5,6 +5,7 @@
 // -------------------------------------
 // Libraries
 // - PubSubClient by Nick O'leary
+// - DHT22 by dvarrel
 // - ArduinoJson
 ////////////////////////////////////////
 
@@ -14,6 +15,7 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <DHT22.h>
 
 ////////////////////////////////////////
 // DEFINES
@@ -23,6 +25,7 @@
 #define TB_MQTT_SERVER "192.168.1.103"
 #define TB_MQTT_PORT 1883
 #define DEVICE_ACCESS_TOKEN "st5l8N7tbEYi95KCkQWZ"
+#define DHT22_PIN 23
 #define ATTRIBUTE_KEYS "{\"clientKeys\":\"localIp\",\"sharedKeys\":\"uploadInterval,deviceMode\"}"
 #define JSON_DOC_SIZE 1024
 #define LED_PIN 2
@@ -72,11 +75,14 @@ unsigned long sensorReadInterval = 1000;
 unsigned long sensorUploadTimer = 0;
 unsigned long sensorUploadInterval = 5000;
 int16_t sensorValue = 25; // temp
-int8_t humiValue = 50; // humi
 
 // Device Status
 unsigned long deviceStatusTimer = 0;
 unsigned long deviceStatusInterval = 10000;
+// DHT22
+DHT22 dht22(DHT22_PIN);
+float temperature = 0;
+float humidity = 0;
 
 // Device Config
 unsigned int reqSeq = 1;
@@ -228,17 +234,42 @@ void sensorLoop(unsigned long t) {
     if (prevValue != sensorValue) {
       sensorUploadTimer = 0; // force upload
     }
+    Serial.printf("Sensor: new=%d prev=%d\n", sensorValue, prevValue);
+    
+    float temp = dht22.getTemperature();
+    float humi = dht22.getHumidity();
 
-    humiValue = random(30, 60);
-    // Serial.printf("Sensor: new=%d prev=%d\n", sensorValue, prevValue);
+    if (dht22.getLastError() == dht22.OK) {
+      float prevTemp = temperature;
+      float prevHumi = humidity;
+      temperature = temp;
+      humidity = humi;
+      if (prevTemp != temp || prevHumi != humi) {
+        sensorUploadTimer = 0; // force upload
+      }
+    } else {
+      Serial.print("last error :");
+      Serial.println(dht22.getLastError());
+    }
   }
+
+  // read every 1sec
+  // 1: temp = 25, prev = 25
+  // 2: temp = 26, prev = 25 => upload
+  // 3: temp = 26, prev = 26
+  // 4: temp = 26, prev = 26
+  // 5: temp = 26, prev = 26
+  // 6: temp = 26, prev = 26
+  // 7: temp = 26, prev = 26 => upload
+  // 8: temp = 26, prev = 26
+  // 9: temp = 25, prev = 26 => upload
+  // upload every 5sec
 
   if (t - sensorUploadTimer >= sensorUploadInterval) {
     sensorUploadTimer = t;
-    
     if (mqttReady) {
       char payload[1024];
-      sprintf(payload, "{\"temperature\":%d,\"humidity\":%d}", sensorValue, humiValue);
+      sprintf(payload, "{\"sensor\":%d,\"temperature\":%0.2f,\"humidity\":%0.2f}", sensorValue, temperature, humidity);
       mqttClient.publish(TB_TELEMETRY_TOPIC, payload);
       Serial.print("Sensor Upload: ");
       Serial.println(payload);
