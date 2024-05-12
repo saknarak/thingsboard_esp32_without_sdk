@@ -25,7 +25,7 @@
 #define DEVICE_ACCESS_TOKEN "st5l8N7tbEYi95KCkQWZ"
 #define ATTRIBUTE_KEYS "{\"clientKeys\":\"localIp\",\"sharedKeys\":\"uploadInterval,deviceMode\"}"
 #define JSON_DOC_SIZE 1024
-#define LED_PIN 13
+#define LED_PIN 2
 // -------------------------------------
 #define WIFI_DISCONNECTED 0
 #define WIFI_CONNECTING 1
