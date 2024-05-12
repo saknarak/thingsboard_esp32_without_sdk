@@ -20,7 +20,7 @@
 ////////////////////////////////////////
 #define WIFI_SSID "wlan_2.4G"
 #define WIFI_PASSWORD "0891560526"
-#define TB_MQTT_SERVER "192.168.1.106"
+#define TB_MQTT_SERVER "192.168.1.103"
 #define TB_MQTT_PORT 1883
 #define DEVICE_ACCESS_TOKEN "st5l8N7tbEYi95KCkQWZ"
 #define ATTRIBUTE_KEYS "{\"clientKeys\":\"localIp\",\"sharedKeys\":\"uploadInterval,deviceMode\"}"
@@ -70,7 +70,8 @@ unsigned long sensorReadTimer = 0;
 unsigned long sensorReadInterval = 1000;
 unsigned long sensorUploadTimer = 0;
 unsigned long sensorUploadInterval = 5000;
-int16_t sensorValue = 25;
+int16_t sensorValue = 25; // temp
+int8_t humiValue = 50; // humi
 
 // Device Status
 unsigned long deviceStatusTimer = 0;
@@ -224,6 +225,8 @@ void sensorLoop(unsigned long t) {
     if (prevValue != sensorValue) {
       sensorUploadTimer = 0; // force upload
     }
+
+    humiValue = random(30, 60);
     // Serial.printf("Sensor: new=%d prev=%d\n", sensorValue, prevValue);
   }
 
@@ -232,7 +235,7 @@ void sensorLoop(unsigned long t) {
     
     if (mqttReady) {
       char payload[1024];
-      sprintf(payload, "{\"temperature\":%d}", sensorValue);
+      sprintf(payload, "{\"temperature\":%d,\"humidity\":%d}", sensorValue, humiValue);
       mqttClient.publish(TB_TELEMETRY_TOPIC, payload);
       Serial.print("Sensor Upload: ");
       Serial.println(payload);
