@@ -25,6 +25,7 @@
 #define DEVICE_ACCESS_TOKEN "st5l8N7tbEYi95KCkQWZ"
 #define ATTRIBUTE_KEYS "{\"clientKeys\":\"localIp\",\"sharedKeys\":\"uploadInterval,deviceMode\"}"
 #define JSON_DOC_SIZE 1024
+#define LED_PIN 13
 // -------------------------------------
 #define WIFI_DISCONNECTED 0
 #define WIFI_CONNECTING 1
@@ -213,6 +214,8 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
 // SENSORS
 void sensorSetup() {
   // do nothing
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, deviceMode);
 }
 
 void sensorLoop(unsigned long t) {
@@ -259,7 +262,7 @@ void deviceStatusUpload() {
   char payload[1024];
   multi_heap_info_t info;
   heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-  sprintf(payload, "{\"rssi\":%d,\"channel\":%d,\"bssid\":\"%s\",\"localIp\":\"%s\",\"ssid\":\"%s\",\"totalFree\":%d,\"minFree\":%d,\"largeFree\":%d}",
+  sprintf(payload, "{\"rssi\":%d,\"channel\":%d,\"bssid\":\"%s\",\"localIp\":\"%s\",\"ssid\":\"%s\",\"totalFree\":%d,\"minFree\":%d,\"largeFree\":%d,\"deviceMode\":%d}",
     WiFi.RSSI(),
     WiFi.channel(),
     WiFi.BSSIDstr().c_str(),
@@ -267,7 +270,8 @@ void deviceStatusUpload() {
     WiFi.SSID().c_str(),
     info.total_free_bytes,
     info.minimum_free_bytes,
-    info.largest_free_block
+    info.largest_free_block,
+    deviceMode
   );
   mqttClient.publish(TB_ATTRIBUTE_TOPIC, payload);
   Serial.print("Device Status: ");
@@ -303,6 +307,8 @@ void processSharedAttributes(JsonObject &shared) {
     uint8_t newMode = shared["deviceMode"].as<uint8_t>();
     if (newMode >= 0 && newMode <= 1) {
       deviceMode = newMode;
+      digital(LED_PIN, deviceMode);
+      deviceStatusUpload();
       Serial.printf("Config: deviceMode=%d\n", deviceMode);
     }
   }
@@ -324,8 +330,13 @@ void processRpcRequest(unsigned int reqId, DynamicJsonDocument &doc) {
     Serial.printf("RPC: reset delay=%d\n", delay);
     return rpcResponse(reqId, "{\"ok\":1}");
     // processReset(doc["param"] | 0);
-  } else if (strcmp(method, "") == 0) {
-
+  } else if (strcmp(method, "setMode") == 0) {
+    int newMode = doc["params"];
+    Serial.printf("RPC: setMode to %d\n", newMode);
+    deviceMode = newMode;
+    digitalWrite(LED_PIN, deviceMode);
+    deviceStatusUpload();
+    return rpcResponse(reqId, "{\"ok\":1}");
   }
   
   return rpcResponse(reqId, "{\"error\":\"unknown method\"}");
