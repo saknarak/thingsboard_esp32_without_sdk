@@ -28,7 +28,8 @@
 #define DHT22_PIN 23
 #define ATTRIBUTE_KEYS "{\"clientKeys\":\"localIp\",\"sharedKeys\":\"uploadInterval,deviceMode\"}"
 #define JSON_DOC_SIZE 1024
-#define LED_PIN 2
+#define FAN_PIN 12
+#define WATER_PIN 12
 // -------------------------------------
 #define WIFI_DISCONNECTED 0
 #define WIFI_CONNECTING 1
@@ -71,22 +72,23 @@ char clientId[16];
 
 // Sensor
 unsigned long sensorReadTimer = 0;
-unsigned long sensorReadInterval = 1000;
+unsigned long sensorReadInterval = 2000;
 unsigned long sensorUploadTimer = 0;
 unsigned long sensorUploadInterval = 5000;
-int16_t sensorValue = 25; // temp
+float temperature = 25;
+float humidity = 50;
+float soilMoisure = 70;
 
 // Device Status
 unsigned long deviceStatusTimer = 0;
 unsigned long deviceStatusInterval = 10000;
 // DHT22
 DHT22 dht22(DHT22_PIN);
-float temperature = 0;
-float humidity = 0;
 
 // Device Config
 unsigned int reqSeq = 1;
-uint8_t deviceMode = 1; // 1 = ON, 0 = OFF
+uint8_t fan = 0;
+uint8_t water = 0;
 int resTopicLen = strlen(TB_ATTRIBUTE_RESPONSE_TOPIC) - 1; // v1/devices/me/attributes/response/+
 int rpcTopicLen = strlen(TB_RPC_REQUEST_TOPIC) - 1;
 ////////////////////////////////////////
@@ -220,56 +222,37 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
 // SENSORS
 void sensorSetup() {
   // do nothing
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, deviceMode);
+  pinMode(FAN_PIN, OUTPUT);
+  digitalWrite(FAN_PIN, fan);
+  pinMode(WATER_PIN, OUTPUT);
+  digitalWrite(WATER_PIN, water);
 }
 
 void sensorLoop(unsigned long t) {
   if (t - sensorReadTimer >= sensorReadInterval) {
     sensorReadTimer = t;
     
-    int prevValue = sensorValue;
-    int rnd = random(0, 10);
-    sensorValue = sensorValue + (rnd == 0 ? -1 : ( rnd == 9 ? 1 : 0));
-    if (prevValue != sensorValue) {
-      sensorUploadTimer = 0; // force upload
-    }
-    Serial.printf("Sensor: new=%d prev=%d\n", sensorValue, prevValue);
-    
-    float temp = dht22.getTemperature();
-    float humi = dht22.getHumidity();
-
-    if (dht22.getLastError() == dht22.OK) {
-      float prevTemp = temperature;
-      float prevHumi = humidity;
-      temperature = temp;
-      humidity = humi;
-      if (prevTemp != temp || prevHumi != humi) {
-        sensorUploadTimer = 0; // force upload
-      }
+    if (fan == 0) {
+      temperature -= random(5, 11) / 10;
+      humidity += random(5, 11) / 10;
     } else {
-      Serial.print("last error :");
-      Serial.println(dht22.getLastError());
+      temperature += random(5, 11) / 10;
+      humidity -= random(5, 11) / 10;
     }
+    if (water == 0) {
+      soilMoisure -= random(10, 21) / 10;
+    } else {
+      soilMoisure += random(30, 51) / 10;
+    }
+    sensorUploadTimer = 0;
   }
-
-  // read every 1sec
-  // 1: temp = 25, prev = 25
-  // 2: temp = 26, prev = 25 => upload
-  // 3: temp = 26, prev = 26
-  // 4: temp = 26, prev = 26
-  // 5: temp = 26, prev = 26
-  // 6: temp = 26, prev = 26
-  // 7: temp = 26, prev = 26 => upload
-  // 8: temp = 26, prev = 26
-  // 9: temp = 25, prev = 26 => upload
-  // upload every 5sec
 
   if (t - sensorUploadTimer >= sensorUploadInterval) {
     sensorUploadTimer = t;
     if (mqttReady) {
       char payload[1024];
-      sprintf(payload, "{\"sensor\":%d,\"temperature\":%0.2f,\"humidity\":%0.2f}", sensorValue, temperature, humidity);
+      sprintf(payload, "{\"temperature\":%0.1f,\"humidity\":%0.1f,\"soilMoisure\":%0.1f}",
+        temperature, humidity, soilMoisure);
       mqttClient.publish(TB_TELEMETRY_TOPIC, payload);
       Serial.print("Sensor Upload: ");
       Serial.println(payload);
@@ -293,7 +276,7 @@ void deviceStatusUpload() {
   char payload[1024];
   multi_heap_info_t info;
   heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-  sprintf(payload, "{\"rssi\":%d,\"channel\":%d,\"bssid\":\"%s\",\"localIp\":\"%s\",\"ssid\":\"%s\",\"totalFree\":%d,\"minFree\":%d,\"largeFree\":%d,\"deviceMode\":%d}",
+  sprintf(payload, "{\"rssi\":%d,\"channel\":%d,\"bssid\":\"%s\",\"localIp\":\"%s\",\"ssid\":\"%s\",\"totalFree\":%d,\"minFree\":%d,\"largeFree\":%d,\"fan\":%d,\"water\":%d}",
     WiFi.RSSI(),
     WiFi.channel(),
     WiFi.BSSIDstr().c_str(),
@@ -302,7 +285,8 @@ void deviceStatusUpload() {
     info.total_free_bytes,
     info.minimum_free_bytes,
     info.largest_free_block,
-    deviceMode
+    fan,
+    water
   );
   mqttClient.publish(TB_ATTRIBUTE_TOPIC, payload);
   Serial.print("Device Status: ");
@@ -334,13 +318,22 @@ void processSharedAttributes(JsonObject &shared) {
       Serial.printf("Config: sensorUploadInterval=%d\n", sensorUploadInterval);
     }
   }
-  if (shared.containsKey("deviceMode")) {
-    uint8_t newMode = shared["deviceMode"].as<uint8_t>();
+  if (shared.containsKey("fan")) {
+    uint8_t newMode = shared["fan"].as<uint8_t>();
     if (newMode >= 0 && newMode <= 1) {
-      deviceMode = newMode;
-      digitalWrite(LED_PIN, deviceMode);
+      fan = newMode;
+      digitalWrite(FAN_PIN, fan);
       deviceStatusUpload();
-      Serial.printf("Config: deviceMode=%d\n", deviceMode);
+      Serial.printf("Config: fan=%d\n", fan);
+    }
+  }
+  if (shared.containsKey("water")) {
+    uint8_t newMode = shared["water"].as<uint8_t>();
+    if (newMode >= 0 && newMode <= 1) {
+      water = newMode;
+      digitalWrite(WATER_PIN, water);
+      deviceStatusUpload();
+      Serial.printf("Config: water=%d\n", water);
     }
   }
 }
@@ -361,11 +354,18 @@ void processRpcRequest(unsigned int reqId, DynamicJsonDocument &doc) {
     Serial.printf("RPC: reset delay=%d\n", delay);
     return rpcResponse(reqId, "{\"ok\":1}");
     // processReset(doc["param"] | 0);
-  } else if (strcmp(method, "setMode") == 0) {
+  } else if (strcmp(method, "setFan") == 0) {
     int newMode = doc["params"];
-    Serial.printf("RPC: setMode to %d\n", newMode);
-    deviceMode = newMode;
-    digitalWrite(LED_PIN, deviceMode);
+    Serial.printf("RPC: setFan to %d\n", newMode);
+    fan = newMode;
+    digitalWrite(FAN_PIN, fan);
+    deviceStatusUpload();
+    return rpcResponse(reqId, "{\"ok\":1}");
+  } else if (strcmp(method, "setWater") == 0) {
+    int newMode = doc["params"];
+    Serial.printf("RPC: setWater to %d\n", newMode);
+    water = newMode;
+    digitalWrite(WATER_PIN, water);
     deviceStatusUpload();
     return rpcResponse(reqId, "{\"ok\":1}");
   }
