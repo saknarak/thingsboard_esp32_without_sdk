@@ -72,7 +72,13 @@ unsigned long mqttDelayTimeout = 5000;
 uint64_t chipId = 0;
 char clientId[16];
 
-// Sensor
+// Sensor flag (0 = disabled, 1 = enabled)
+uint8_t hasDht22 = 1;
+uint8_t hasSoil = 1;
+uint8_t hasFan = 1;
+uint8_t hasWater = 1;
+
+
 unsigned long sensorReadTimer = 0;
 unsigned long sensorReadInterval = 2000;
 unsigned long sensorUploadTimer = 0;
@@ -234,51 +240,82 @@ void sensorLoop(unsigned long t) {
   if (t - sensorReadTimer >= sensorReadInterval) {
     sensorReadTimer = t;
     
-    if (fan == 0) {
-      temperature -= 1.0 * random(5, 11) / 10.0;
-      humidity += 1.0 * random(5, 11) / 10.0;
-      if (temperature <= 20) {
-        temperature = 20;
-      }
-      if (humidity >= 90) {
-        humidity = 90;
-      }
-    } else {
-      temperature += 1.0 * random(5, 11) / 10.0;
-      humidity -= 1.0 * random(5, 11) / 10.0;
-      if (temperature > 45) {
-        temperature = 45;
-      }
-      if (humidity <= 20) {
-        humidity = 20;
+    if (hasDht22) {
+      float temp = dht22.getTemperature();
+      float humi = dht22.getHumidity();
+
+      if (dht22.getLastError() == dht22.OK) {
+        float prevTemp = temperature;
+        float prevHumi = humidity;
+        temperature = temp;
+        humidity = humi;
+      } else {
+        Serial.print("last error :");
+        Serial.println(dht22.getLastError());
       }
     }
-    if (water == 0) {
-      soilMoisure -= 1.0 * random(10, 21) / 10.0;
-      if (soilMoisure <= 20) {
-        soilMoisure = 20;
-      }
-    } else {
-      soilMoisure += 1.0 * random(30, 51) / 10.0;
-      if (soilMoisure >= 95) {
-        soilMoisure = 95;
-      }
+
+    if (hasSoil) {
+      int sensorValue = analogRead(MOISTURE_SENSOR_PIN); // อ่านค่าอนาล็อกจากเซ็นเซอร์
+      // int moisturePercent = map(sensorValue, 0, 4095, 100, 0); // แปลงค่าจาก 0-4095 เป็น 100-0
+      soilMoisure = sensorValue * 100.0/4095.0;
     }
+
     sensorUploadTimer = 0;
   }
 
   if (t - sensorUploadTimer >= sensorUploadInterval) {
     sensorUploadTimer = t;
     if (mqttReady) {
-      char payload[1024];
-      sprintf(payload, "{\"temperature\":%0.1f,\"humidity\":%0.1f,\"soilMoisure\":%0.1f}",
-        temperature, humidity, soilMoisure);
-      mqttClient.publish(TB_TELEMETRY_TOPIC, payload);
-      Serial.print("Sensor Upload: ");
-      Serial.println(payload);
+      if (hasDht22) {
+        char payload[1024];
+        sprintf(payload, "{\"temperature\":%0.1f,\"humidity\":%0.1f}", temperature, humidity);
+        mqttClient.publish(TB_TELEMETRY_TOPIC, payload);
+        Serial.print("Sensor Upload: ");
+        Serial.println(payload);
+      }
+      if (hasSoil) {
+        char payload[1024];
+        sprintf(payload, "{\"soilMoisure\":%0.1f}", soilMoisure);
+        mqttClient.publish(TB_TELEMETRY_TOPIC, payload);
+        Serial.print("Sensor Upload: ");
+        Serial.println(payload);
+      }
     } else {
       // TODO: append to queue
     }
+  }
+}
+
+void setFan(uint8_t newMode) {
+  fan = newMode;
+  digitalWrite(FAN_PIN, fan);
+  deviceStatusUpload();
+  // telementry
+  if (mqttReady) {
+    char payload[1024];
+    sprintf(payload, "{\"fan\":%d}", fan);
+    mqttClient.publish(TB_TELEMETRY_TOPIC, payload);
+    Serial.print("Fan Upload: ");
+    Serial.println(payload);
+  } else {
+    // TODO: append to queue
+  }
+}
+
+void setWater(uint8_t newMode) {
+  water = newMode;
+  digitalWrite(WATER_PIN, water);
+  deviceStatusUpload();
+  // telementry
+  if (mqttReady) {
+    char payload[1024];
+    sprintf(payload, "{\"water\":%d}", water);
+    mqttClient.publish(TB_TELEMETRY_TOPIC, payload);
+    Serial.print("Fan Upload: ");
+    Serial.println(payload);
+  } else {
+    // TODO: append to queue
   }
 }
 
@@ -338,22 +375,46 @@ void processSharedAttributes(JsonObject &shared) {
       Serial.printf("Config: sensorUploadInterval=%d\n", sensorUploadInterval);
     }
   }
-  if (shared.containsKey("fan")) {
+  if (shared.containsKey("fan") && hasFan == 1) {
     uint8_t newMode = shared["fan"].as<uint8_t>();
     if (newMode >= 0 && newMode <= 1) {
-      fan = newMode;
-      digitalWrite(FAN_PIN, fan);
-      deviceStatusUpload();
+      setFan(newMode);
       Serial.printf("Config: fan=%d\n", fan);
     }
   }
-  if (shared.containsKey("water")) {
+  if (shared.containsKey("water") && hasWater == 1) {
     uint8_t newMode = shared["water"].as<uint8_t>();
     if (newMode >= 0 && newMode <= 1) {
-      water = newMode;
-      digitalWrite(WATER_PIN, water);
-      deviceStatusUpload();
+      setWater(newMode);
       Serial.printf("Config: water=%d\n", water);
+    }
+  }
+  if (shared.containsKey("hasDht22")) {
+    uint8_t newMode = shared["hasDht22"].as<uint8_t>();
+    if (newMode == 0 || newMode == 1) {
+      hasDht22 = newMode;
+      Serial.printf("Config: hasDht22=%d\n", hasDht22);
+    }
+  }
+  if (shared.containsKey("hasSoil")) {
+    uint8_t newMode = shared["hasSoil"].as<uint8_t>();
+    if (newMode == 0 || newMode == 1) {
+      hasSoil = newMode;
+      Serial.printf("Config: hasSoil=%d\n", hasSoil);
+    }
+  }
+  if (shared.containsKey("hasFan")) {
+    uint8_t newMode = shared["hasFan"].as<uint8_t>();
+    if (newMode == 0 || newMode == 1) {
+      hasFan = newMode;
+      Serial.printf("Config: hasFan=%d\n", hasFan);
+    }
+  }
+  if (shared.containsKey("hasWater")) {
+    uint8_t newMode = shared["hasWater"].as<uint8_t>();
+    if (newMode == 0 || newMode == 1) {
+      hasWater = newMode;
+      Serial.printf("Config: hasWater=%d\n", hasWater);
     }
   }
 }
@@ -374,19 +435,15 @@ void processRpcRequest(unsigned int reqId, DynamicJsonDocument &doc) {
     Serial.printf("RPC: reset delay=%d\n", delay);
     return rpcResponse(reqId, "{\"ok\":1}");
     // processReset(doc["param"] | 0);
-  } else if (strcmp(method, "setFan") == 0) {
+  } else if (strcmp(method, "setFan") == 0 && hasFan == 1) {
     int newMode = doc["params"];
     Serial.printf("RPC: setFan to %d\n", newMode);
-    fan = newMode;
-    digitalWrite(FAN_PIN, fan);
-    deviceStatusUpload();
+    setFan(newMode);
     return rpcResponse(reqId, "{\"ok\":1}");
-  } else if (strcmp(method, "setWater") == 0) {
+  } else if (strcmp(method, "setWater") == 0 && hasWater == 1) {
     int newMode = doc["params"];
     Serial.printf("RPC: setWater to %d\n", newMode);
-    water = newMode;
-    digitalWrite(WATER_PIN, water);
-    deviceStatusUpload();
+    setWater(newMode);
     return rpcResponse(reqId, "{\"ok\":1}");
   }
   
