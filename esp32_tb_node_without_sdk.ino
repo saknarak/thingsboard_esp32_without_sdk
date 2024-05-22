@@ -25,11 +25,13 @@
 #define TB_MQTT_SERVER "192.168.1.103"
 #define TB_MQTT_PORT 1883
 #define DEVICE_ACCESS_TOKEN "g8cnzpG7i5cPL2yBN0Za"
-#define DHT22_PIN 23
 #define ATTRIBUTE_KEYS "{\"clientKeys\":\"localIp\",\"sharedKeys\":\"uploadInterval,deviceMode\"}"
 #define JSON_DOC_SIZE 1024
+#define DHT22_PIN 23
+#define MOISTURE_SENSOR_PIN 32  // กำหนดขาที่ใช้สำหรับเซ็นเซอร์ของ ESP32
 #define FAN_PIN 12
 #define WATER_PIN 12
+
 // -------------------------------------
 #define WIFI_DISCONNECTED 0
 #define WIFI_CONNECTING 1
