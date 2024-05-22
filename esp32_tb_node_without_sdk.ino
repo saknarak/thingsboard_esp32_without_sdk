@@ -20,10 +20,10 @@
 ////////////////////////////////////////
 // DEFINES
 ////////////////////////////////////////
-#define FW_VERSION "0.1"
+#define FW_VERSION "0.3"
 #define WIFI_SSID "wlan_2.4G"
 #define WIFI_PASSWORD "0891560526"
-#define TB_MQTT_SERVER "192.168.1.103"
+#define TB_MQTT_SERVER "192.168.1.106"
 #define TB_MQTT_PORT 1883
 #define DEVICE_ACCESS_TOKEN "g8cnzpG7i5cPL2yBN0Za"
 #define DHT22_PIN 23
@@ -38,7 +38,8 @@
 // -------------------------------------
 #define MQTT_DISCONNECTED 0
 #define MQTT_CONNECTED 2
-#define MQTT_PACKET_SIZE 1024
+#define MQTT_PACKET_SIZE 2048
+
 // -------------------------------------
 // https://thingsboard.io/docs/reference/mqtt-api/#telemetry-upload-api
 #define TB_TELEMETRY_TOPIC "v1/devices/me/telemetry"
@@ -97,7 +98,8 @@ int rpcTopicLen = strlen(TB_RPC_REQUEST_TOPIC) - 1;
 // OTA
 int otaId = 1;
 int otaIndex = 0;
-
+#define OTA_CHUNK_SIZE "1024"
+size_t fw_size = 0;
 ////////////////////////////////////////
 // MAIN
 ////////////////////////////////////////
@@ -204,10 +206,11 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   if (strncmp(topic, "v2/fw/response/", 14) == 0) {
     if (length > 0) {
       Update.write(payload, length);
+      
       char otaTopic[100];
       sprintf(otaTopic, TB_OTA_REQUEST_TOPIC, otaId, otaIndex);
       Serial.println(otaTopic);
-      mqttClient.publish(otaTopic, "512");
+      mqttClient.publish(otaTopic, OTA_CHUNK_SIZE);
       otaIndex++;
     } else {
       Update.end();
@@ -216,6 +219,8 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         ESP.restart();
       } else {
         Serial.println("OTA Failed");
+        otaId++;
+        otaIndex = 0;
       }
     }
     return;
@@ -387,14 +392,14 @@ void processSharedAttributes(JsonObject &shared) {
   }
   if (shared.containsKey("fw_version")) {
     Serial.print("GET: fw_version size=");
-    long fwSize = shared["fw_size"];
-    Serial.println(fwSize); 
-    Update.begin(fwSize);
-    char otaTopic[100];
-    sprintf(otaTopic, TB_OTA_REQUEST_TOPIC, otaId, otaIndex);
-    Serial.println(otaTopic);
-    mqttClient.publish(otaTopic, "512");
-    otaIndex++;
+    fw_size = shared["fw_size"];
+    Serial.printf("fw_size=%d\n", fw_size);
+    // Update.begin(fwSize);
+    // char otaTopic[100];
+    // sprintf(otaTopic, TB_OTA_REQUEST_TOPIC, otaId, otaIndex);
+    // Serial.println(otaTopic);
+    // mqttClient.publish(otaTopic, "512");
+    // otaIndex++;
   }
 }
 
@@ -428,6 +433,20 @@ void processRpcRequest(unsigned int reqId, DynamicJsonDocument &doc) {
     digitalWrite(WATER_PIN, water);
     deviceStatusUpload();
     return rpcResponse(reqId, "{\"ok\":1}");
+  } else if (strcmp(method, "ota") == 0) {
+    // method: 'ota'
+    // params: 0
+    if (fw_size > 0) {
+      Update.begin(fw_size);
+      char otaTopic[100];
+      otaIndex = 0;
+      sprintf(otaTopic, TB_OTA_REQUEST_TOPIC, otaId, otaIndex);
+      Serial.println(otaTopic);
+      mqttClient.publish(otaTopic, OTA_CHUNK_SIZE);
+      otaIndex++;
+    } else {
+      Serial.println("Sorry fw_size == 0");
+    }
   }
   
   return rpcResponse(reqId, "{\"error\":\"unknown method\"}");
